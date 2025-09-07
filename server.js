@@ -2,9 +2,22 @@ import { WebSocketServer } from "ws";
 import pkg from "matter-js";
 import { v4 as uuidv4 } from "uuid";
 
+import http from "http";
+
+// cria servidor HTTP
+const server = http.createServer((req, res) => {
+  if (req.method === "GET" && req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok", time: new Date().toISOString() }));
+  } else {
+    res.writeHead(404);
+    res.end("Not Found");
+  }
+});
+
 const { Engine, Events, Runner, Composite, Body, Bodies } = pkg;
 
-const wss = new WebSocketServer({ port: 8080 });
+const wss = new WebSocketServer({ server });
 const TICK_RATE = 1000 / 60;
 const MIN_PLAYERS = 2;
 const WINNING_SCORE = 3;
@@ -388,3 +401,7 @@ setInterval(cleanupOldRooms, 5 * 60 * 1000);
 
 // Executa uma limpeza logo ao iniciar
 cleanupOldRooms();
+
+server.listen(8080, () => {
+  console.log("🚀 Servidor HTTP e WebSocket rodando na porta 8080");
+});
