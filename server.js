@@ -209,10 +209,45 @@ function endRound(roomId, winnerId) {
         winner: winnerId,
         scores: room.scores,
       });
+
+      // Limpa a sala após breve delay
+      setTimeout(() => {
+        console.log(`🧹 Finalizando sala ${roomId} após vitória`);
+        Composite.clear(room.engine.world, false);
+        if (room.runner) Runner.stop(room.runner);
+        delete rooms[roomId];
+      }, 3000);
+
       return;
     }
   }
 
+  // ✅ Checa se chegou a 20 rodadas
+  if (room.round >= 20) {
+    const entries = Object.entries(room.scores);
+    if (entries.length > 0) {
+      const [topPlayerId] = entries.reduce((max, curr) =>
+        curr[1] > max[1] ? curr : max
+      );
+
+      broadcast(room, {
+        type: "matchWinner",
+        winner: topPlayerId,
+        reason: "maxRounds",
+        scores: room.scores,
+      });
+
+      setTimeout(() => {
+        console.log(`🧹 Finalizando sala ${roomId} após 20 rodadas`);
+        Composite.clear(room.engine.world, false);
+        if (room.runner) Runner.stop(room.runner);
+        delete rooms[roomId];
+      }, 3000);
+    }
+    return;
+  }
+
+  // Próxima rodada em 3s
   setTimeout(() => startRound(roomId), 3000);
 }
 
@@ -358,12 +393,12 @@ wss.on("connection", (ws) => {
       if (data.type === "pingTest") {
         setTimeout(() => {
           ws.send(
-          JSON.stringify({
-            type: "pongTest",
-            clientTime: data.time,
-            serverTime: Date.now(),
-          })
-        );
+            JSON.stringify({
+              type: "pongTest",
+              clientTime: data.time,
+              serverTime: Date.now(),
+            })
+          );
         }, 200);
       }
     } catch (err) {
