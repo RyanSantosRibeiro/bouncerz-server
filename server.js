@@ -133,7 +133,8 @@ function createRoom(roomId) {
           });
 
           console.log(
-            "💥 Impacto entre jogadores detectado! Modo rígido aplicado se ativado.", {pa: pA?.isRigid, pn: pB?.isRigid}
+            "💥 Impacto entre jogadores detectado! Modo rígido aplicado se ativado.",
+            { pa: pA?.isRigid, pn: pB?.isRigid }
           );
         }
       }
@@ -145,8 +146,8 @@ function createRoom(roomId) {
 
 function applyInput(player, input) {
   const body = player.body;
-  const force = 0.0005;      // movimento lateral mais lento
-const jumpForce = -0.03; 
+  const force = 0.0005; // movimento lateral mais lento
+  const jumpForce = -0.03;
 
   if (input.keys.a) Body.applyForce(body, body.position, { x: -force, y: 0 });
   if (input.keys.d) Body.applyForce(body, body.position, { x: force, y: 0 });
@@ -223,7 +224,7 @@ function tickRoom(roomId) {
 
   for (const id in players) {
     const player = players[id];
-    
+
     player.inputQueue.sort((a, b) => a.timestamp - b.timestamp);
     while (player.inputQueue.length > 0) {
       const input = player.inputQueue.shift();
@@ -233,13 +234,13 @@ function tickRoom(roomId) {
   }
 
   for (const id in players) {
-  const player = players[id];
-  const desiredMass = player.isRigid ? 10 : 1;
+    const player = players[id];
+    const desiredMass = player.isRigid ? 10 : 1;
 
-  if (player.body.mass !== desiredMass) {
-    Body.setMass(player.body, desiredMass);
+    if (player.body.mass !== desiredMass) {
+      Body.setMass(player.body, desiredMass);
+    }
   }
-}
 
   Engine.update(engine, 1000 / 60);
 
@@ -352,6 +353,18 @@ wss.on("connection", (ws) => {
           player.inputQueue.push(data);
           room.lastActivity = new Date(); // atualiza atividade
         }
+      }
+
+      if (data.type === "pingTest") {
+        setTimeout(() => {
+          ws.send(
+          JSON.stringify({
+            type: "pongTest",
+            clientTime: data.time,
+            serverTime: Date.now(),
+          })
+        );
+        }, 200);
       }
     } catch (err) {
       console.error("❌ Erro ao processar mensagem:", err);
