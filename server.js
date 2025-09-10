@@ -24,7 +24,7 @@ const WINNING_SCORE = 3;
 const INACTIVITY_LIMIT = 10 * 60 * 1000; // 10 minutos
 const PLAYER_BOUNCE = 0.3; // bounce ao cair
 const IMPACT_THRESHOLD = 6; // velocidade mínima para reação de impacto
-const IMPACT_FORCE = 0.01; // força aplicada ao quique entre bolas
+const IMPACT_FORCE = 0.015; // força aplicada ao quique entre bolas
 
 const rooms = {};
 
@@ -147,7 +147,7 @@ function createRoom(roomId) {
 function applyInput(player, input) {
   const body = player.body;
   const force = 0.0005; // movimento lateral mais lento
-  const jumpForce = -0.02;
+  const jumpForce = -0.03;
 
   if (input.keys.a) Body.applyForce(body, body.position, { x: -force, y: 0 });
   if (input.keys.d) Body.applyForce(body, body.position, { x: force, y: 0 });
