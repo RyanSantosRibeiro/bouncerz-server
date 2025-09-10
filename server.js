@@ -1,5 +1,6 @@
 import { WebSocketServer } from "ws";
 import pkg from "matter-js";
+const { Engine, Events, Runner, Composite, Body, Bodies } = pkg;
 import { v4 as uuidv4 } from "uuid";
 
 import http from "http";
@@ -15,7 +16,6 @@ const server = http.createServer((req, res) => {
   }
 });
 
-const { Engine, Events, Runner, Composite, Body, Bodies } = pkg;
 
 const wss = new WebSocketServer({ server });
 const TICK_RATE = 1000 / 60;
@@ -147,7 +147,7 @@ function createRoom(roomId) {
 function applyInput(player, input) {
   const body = player.body;
   const force = 0.0005; // movimento lateral mais lento
-  const jumpForce = -0.03;
+  const jumpForce = -0.02;
 
   if (input.keys.a) Body.applyForce(body, body.position, { x: -force, y: 0 });
   if (input.keys.d) Body.applyForce(body, body.position, { x: force, y: 0 });
@@ -304,6 +304,8 @@ function tickRoom(roomId) {
     alive: p.alive,
     lastProcessedInput: p.lastProcessedInput ?? 0,
     isRigid: p.isRigid, // << NOVO
+    color: p.color,
+    username: p.username,
   }));
 
   broadcast(room, {
@@ -324,6 +326,28 @@ function broadcast(room, message) {
   }
 }
 
+function cleanupOldRooms() {
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+
+  for (const roomId in rooms) {
+    const room = rooms[roomId];
+    const noPlayers = Object.keys(room.players).length === 0;
+    const inactiveForTooLong = now - room.lastActivity > INACTIVITY_LIMIT;
+    const isOld = room.createdAt < yesterday;
+
+    if (noPlayers && (inactiveForTooLong || isOld)) {
+      console.log(`🧹 Limpando sala: ${roomId}`);
+
+      Composite.clear(room.engine.world, false);
+      if (room.runner) Runner.stop(room.runner);
+
+      delete rooms[roomId];
+    }
+  }
+}
+
 // Tick loop
 setInterval(() => {
   for (const roomId in rooms) tickRoom(roomId);
@@ -331,17 +355,23 @@ setInterval(() => {
 
 // WebSocket connection
 wss.on("connection", (ws) => {
-  let playerId = uuidv4();
   let roomId = null;
+  let playerId = null;
 
   ws.on("message", (msg) => {
     try {
       const data = JSON.parse(msg.toString());
-
-      if (data.type === "join" && data.match) {
+      if(playerId === null && data?.user?.id) playerId = data?.user?.id;
+      
+      if (data?.type === "join" && data.match) {
         roomId = `match-${data.match}`;
         if (!rooms[roomId]) createRoom(roomId);
         const room = rooms[roomId];
+        if(room.players.length >= 15) {
+          ws.send(JSON.stringify({ type: "error", message: "Sala cheia" }));
+          ws.close();
+          return;
+        }
 
         const body = Bodies.circle(0, 0, 20, {
           restitution: PLAYER_BOUNCE,
@@ -357,6 +387,8 @@ wss.on("connection", (ws) => {
           ws,
           alive: true,
           isRigid: false, // << NOVO
+          color: data.user.profile.color || "#"+Math.floor(Math.random()*16777215).toString(16),
+          username: data.user.profile.username || "Anon",
         };
 
         if (!room.scores[playerId]) room.scores[playerId] = 0;
@@ -381,7 +413,8 @@ wss.on("connection", (ws) => {
         }
       }
 
-      if (data.type === "input" && roomId && rooms[roomId]) {
+      if (data?.type === "input" && roomId && rooms[roomId]) {
+        if(playerId === null) return;
         const room = rooms[roomId];
         const player = room.players[playerId];
         if (player) {
@@ -390,7 +423,7 @@ wss.on("connection", (ws) => {
         }
       }
 
-      if (data.type === "pingTest") {
+      if (data?.type === "pingTest") {
         setTimeout(() => {
           ws.send(
             JSON.stringify({
@@ -408,7 +441,9 @@ wss.on("connection", (ws) => {
 
   ws.on("close", () => {
     const room = rooms[roomId];
-    if (room) {
+    if( playerId === null) return;
+    console.log(`❌ Conexão fechada: Player ${playerId} na sala ${roomId}`);
+    if (room && room.players[playerId]) {
       Composite.remove(room.engine.world, room.players[playerId]?.body);
       delete room.players[playerId];
       console.log(`⛔ Player ${playerId} saiu da sala ${roomId}`);
@@ -422,27 +457,7 @@ console.log("🚀 Servidor WebSocket rodando na porta 8080");
 // 🔁 Limpeza automática de salas antigas/inativas
 // ----------------------------------------
 
-function cleanupOldRooms() {
-  const now = new Date();
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
 
-  for (const roomId in rooms) {
-    const room = rooms[roomId];
-    const noPlayers = Object.keys(room.players).length === 0;
-    const inactiveForTooLong = now - room.lastActivity > INACTIVITY_LIMIT;
-    const isOld = room.createdAt < yesterday;
-
-    if (noPlayers && (inactiveForTooLong || isOld)) {
-      console.log(`🧹 Limpando sala: ${roomId}`);
-
-      Composite.clear(room.engine.world, false);
-      if (room.runner) Runner.stop(room.runner);
-
-      delete rooms[roomId];
-    }
-  }
-}
 
 // Roda a limpeza a cada 5 minutos
 setInterval(cleanupOldRooms, 5 * 60 * 1000);
